@@ -25,7 +25,8 @@ Usage
 
 Examples
 
-    # Interactive login
+    # Interactive login using public / external IP
+    export EC2SSH_PUBLIC_IP=1
     ec2ssh mydev                                   
 
     # Specify the user and ssh verboseness
@@ -66,7 +67,9 @@ import sys
 import boto3
 
 
-SSH_KEY_TMPDIR = os.path.expanduser("~/.ec2ssh")
+PUBKEY_DIR = os.getenv("EC2SSH_PUBKEY_DIR")
+if not PUBKEY_DIR:
+    PUBKEY_DIR = os.path.expanduser("~/.ec2ssh")
 
 
 def get_instance_by_tag_name(client, name):
@@ -98,7 +101,7 @@ def get_ssh_host_keys_from_console_output(client, instance_id):
 
 def get_known_hosts_name(instance_id, ssh_hostname):
     file_name = "pubkey-%s-%s" % (instance_id, ssh_hostname)
-    return os.path.join(SSH_KEY_TMPDIR, file_name)
+    return os.path.join(PUBKEY_DIR, file_name)
 
 
 def write_known_hosts_file(file_name, keys, ssh_hostname):
@@ -141,7 +144,7 @@ def main():
     trace("Args: {}".format(args))
     user_prefix, instance_name, arg_index = find_hostname_arg(args)
 
-    os.makedirs(SSH_KEY_TMPDIR, exist_ok=True)
+    os.makedirs(PUBKEY_DIR, exist_ok=True)
 
     client = boto3.client('ec2')
     instance = get_instance_by_tag_name(client, instance_name)
