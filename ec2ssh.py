@@ -35,13 +35,13 @@ Examples
     ec2ssh mydev echo "Hello Secure Cloud World"   
 
     # Upload file to instance
-    rsync --rsh=./ec2ssh.py /tmp/localfile.txt user@mydev:/tmp/file2.txt 
+    rsync --rsh=ec2ssh /tmp/local.txt user@mydev:/tmp/file2.txt 
 
     # Download file from instance
-    rsync --rsh=./ec2ssh.py user@mydev:/tmp/file2.txt /tmp/copy.txt
+    rsync --rsh=ec2ssh user@mydev:/tmp/file2.txt /tmp/copy.txt
 
     # Upload file to instance with root perms
-    rsync --rsh=./ec2ssh.py --rsync-path="sudo rsync" \
+    rsync --rsh=ec2ssh --rsync-path="sudo rsync" \
             /tmp/local.txt user@mydev:/tmp/root.txt 
 
 Bugs
