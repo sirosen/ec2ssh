@@ -60,7 +60,9 @@ Examples
 
 Bugs
 
-    - AWS doc / guarantee on how long GetConsoleOutput is retained is horrible!
+    - The GetConsoleOutput API SUCKS!  It takes ~3 minutes for a newly booted
+      instance to have its output available, and there is no guarantee on the 
+      retention time.  In practice, I've seen 8 month old instances still work.
     - AWS should have a standard pubkey API and not use this hack!
     - This script works best when the SSH options are AFTER the hostname.
       However, certain options like -l work in front, to support rsync.
@@ -98,6 +100,9 @@ def get_instance_by_tag_name(client, name):
 
 def get_ssh_host_keys_from_console_output(client, instance_id):
     response = client.get_console_output(InstanceId=instance_id)
+    if "Output" not in response:
+        raise Exception("No console output yet - this may take a few minutes", 
+                instance_id)
     regex = ("-----BEGIN SSH HOST KEY KEYS-----(.*)"
             "-----END SSH HOST KEY KEYS-----")
     output = response["Output"]
