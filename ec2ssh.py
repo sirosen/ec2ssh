@@ -21,7 +21,14 @@ Usage
 
     ec2ssh <instance_name> [args to pass to ssh]
 
-    Set EC2SSH_PUBLIC_IP=1 to use public IP of instance.  Default: private
+Environment Variables
+
+    - EC2SSH_PUBLIC_IP=1 
+        Use public IP of instance.  Default: private
+    - EC2SSH_PUBKEY_DIR=<dir>  
+        Directory that caches custom known hosts files.  Default: ~/.ec2ssh
+    - EC2SSH_DEBUG=1 
+        Enable debugging messages to stderr
 
 Examples
 
@@ -48,11 +55,13 @@ Examples
     rsync --rsh=ec2ssh --rsync-path="sudo rsync" \
             /tmp/local.txt user@mydev:/tmp/root.txt 
 
+    # Show this help
+    ec2ssh
+
 Bugs
 
     - AWS doc on how long console output is retained is clear as mud!
     - AWS should have a standard pubkey API and not use this hack!
-    - Should atomically write/rename the known_hosts files
     - This script works best when the SSH options are AFTER the hostname.
       However, certain options like -l work in front, to support rsync.
 
@@ -63,6 +72,7 @@ import os
 import os.path
 import re
 import sys
+import tempfile
 
 import boto3
 
@@ -104,15 +114,22 @@ def get_known_hosts_name(instance_id, ssh_hostname):
     return os.path.join(PUBKEY_DIR, file_name)
 
 
-def write_known_hosts_file(file_name, keys, ssh_hostname):
+def write_custom_known_hosts_file(file_name, keys, ssh_hostname):
     data = ""
     for key in keys:
         data += (ssh_hostname + " " + key + "\n")
-    # Warning this is not atomic - not concurrent safe
-    open(file_name, "w").write(data)
+    
+    # Atomically write/rename a temp file to be concurrent-safe
+    temp = tempfile.NamedTemporaryFile("w", 
+            dir=PUBKEY_DIR, delete=False)
+    temp.write(data)
+    debug("Wrote temp file {}".format(temp.name))
+    os.rename(temp.name, file_name)
 
 
-def trace(message):
+def debug(message):
+    if os.getenv("EC2SSH_DEBUG") != "1":
+        return
     sys.stderr.write(message.strip() + "\n")
     sys.stderr.flush()
 
@@ -141,7 +158,11 @@ def find_hostname_arg(args):
 
 def main():
     args = sys.argv[1:]
-    trace("Args: {}".format(args))
+    if not args:
+        print(__doc__)
+        sys.exit(2)
+
+    debug("Args: {}".format(args))
     user_prefix, instance_name, arg_index = find_hostname_arg(args)
 
     os.makedirs(PUBKEY_DIR, exist_ok=True)
@@ -158,10 +179,10 @@ def main():
     file_name = get_known_hosts_name(instance_id, ssh_hostname)
     if not os.path.exists(file_name):
         keys = get_ssh_host_keys_from_console_output(client, instance_id)
-        write_known_hosts_file(file_name, keys, ssh_hostname)
-        trace("Created new file: {}".format(file_name))
+        write_custom_known_hosts_file(file_name, keys, ssh_hostname)
+        debug("Created new file: {}".format(file_name))
     else:
-        trace("Using cached file: {}".format(file_name))
+        debug("Using cached file: {}".format(file_name))
 
     # Replace the instance name with the IP 
     args[arg_index:arg_index+1] = [ssh_hostname]
@@ -171,7 +192,7 @@ def main():
     if user_prefix:
         extra_args += ["-l", user_prefix]
     args = ["ssh"] + extra_args + args
-    trace("Running: {}".format(args))
+    debug("Running: {}".format(args))
 
     # Just exec to save memory
     os.execvp(args[0], args)
