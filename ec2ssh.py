@@ -55,10 +55,10 @@ Bugs
 (C) 2017 Karl Pickett
 """
 
-import subprocess
-import sys
-import re
+import os
 import os.path
+import re
+import sys
 
 import boto3
 
@@ -165,11 +165,8 @@ def main():
     args = ["ssh"] + extra_args + args
     trace("Running: {}".format(args))
 
-    # We probably could just exec this
-    p = subprocess.Popen(args)
-    rc = p.wait()
-    trace("Exit status: {}".format(rc))
-    sys.exit(rc)
+    # Just exec to save memory
+    os.execvp(args[0], args)
 
 
 if __name__ == "__main__":
