@@ -1,7 +1,11 @@
 #!/usr/bin/env python3
 
 """
-ec2ssh: SSH *securely* to an EC2 instance without known_hosts hassles
+ec2ssh - SSH *securely* to an EC2 instance without known_hosts hassles
+
+Synopsis
+
+    ec2ssh <instance_name> [args to pass to ssh]
 
 Features
 
@@ -16,10 +20,6 @@ Requirements
 
     - A Linux EC2 instance running cloud-init (the default for Ubuntu)
     - Instance must have a "Name" tag
-
-Usage
-
-    ec2ssh <instance_name> [args to pass to ssh]
 
 Environment Variables
 
@@ -60,7 +60,7 @@ Examples
 
 Bugs
 
-    - AWS doc on how long console output is retained is clear as mud!
+    - AWS doc / guarnatee on how long GetConsoleOutput is retained is horrible!
     - AWS should have a standard pubkey API and not use this hack!
     - This script works best when the SSH options are AFTER the hostname.
       However, certain options like -l work in front, to support rsync.
