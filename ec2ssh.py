@@ -60,10 +60,13 @@ Examples
 
 Bugs
 
-    - The GetConsoleOutput API SUCKS!  It takes ~3 minutes for a newly booted
+    - The GetConsoleOutput API SUCKS!  It takes ~6 minutes for a newly booted
       instance to have its output available, and there is no guarantee on the 
       retention time.  In practice, I've seen 8 month old instances still work.
-    - AWS should have a standard pubkey API and not use this hack!
+      
+    - AWS should have a standard pubkey API and not use this hack!  Tags would
+      be a pain because tag values are limited to 255 chars.
+
     - This script works best when the SSH options are AFTER the hostname.
       However, certain options like -l work in front, to support rsync.
 
