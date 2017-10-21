@@ -6,19 +6,22 @@ ec2ssh: SSH *securely* to an EC2 instance without known_hosts hassles
 Features
 
     - No "trust on first use" problem or "host key changed" alerts.
+    - Does not modify your real known_hosts file
     - Grabs instance public keys using standard cloud-init console output
-    - Custom known_hosts files (per-instance) are cached in ~/.ec2ssh/
-    - Reassigning elastic IPs is no problem
-    - Supports rsync tunneling.  Your one stop shop for file transfers!
+    - Creates and caches per-instance custom known_hosts files in ~/.ec2ssh/
+    - Instance redeploys and elastic IP reassignments are no problem
+    - Supports rsync tunneling.  This is your one stop shop for file transfers!
 
 Requirements
 
-    - A Linux EC2 instance running cloud-init (the default for ubuntu)
+    - A Linux EC2 instance running cloud-init (the default for Ubuntu)
     - Instance must have a "Name" tag
 
 Usage
 
     ec2ssh <instance_name> [args to pass to ssh]
+
+    Set EC2SSH_PUBLIC_IP=1 to use public IP of instance.  Default: private
 
 Examples
 
@@ -50,7 +53,7 @@ Bugs
     - AWS should have a standard pubkey API and not use this hack!
     - Should atomically write/rename the known_hosts files
     - This script works best when the SSH options are AFTER the hostname.
-      However, certain options like -l work in front, since rsync does that.
+      However, certain options like -l work in front, to support rsync.
 
 (C) 2017 Karl Pickett
 """
@@ -143,9 +146,11 @@ def main():
     client = boto3.client('ec2')
     instance = get_instance_by_tag_name(client, instance_name)
 
-    # Could use private IP, e.g. if you are in VPN/VPC
-    ssh_hostname = instance["PublicIpAddress"]
     instance_id = instance["InstanceId"]
+    if os.getenv("EC2SSH_PUBLIC_IP") == "1":
+        ssh_hostname = instance["PublicIpAddress"]
+    else:
+        ssh_hostname = instance["PrivateIpAddress"]
 
     file_name = get_known_hosts_name(instance_id, ssh_hostname)
     if not os.path.exists(file_name):
