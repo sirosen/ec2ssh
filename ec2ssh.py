@@ -5,11 +5,11 @@ ec2ssh: SSH *securely* to an EC2 instance without known_hosts hassles
 
 Features
 
-    - Uses standard cloud-init pubkeys, grabbed via EC2 console output
-    - Custom known_hosts files (per-instance-address) are stored in ~/.ec2ssh/.
-    - Reassigning elastic IPs is fine!
-    - Caching of pubkeys is done basically for free
-    - Exit status is propagated from SSH (e.g. 255 on network failure)
+    - No "trust on first use" problem or "host key changed" alerts.
+    - Grabs instance public keys using standard cloud-init console output
+    - Custom known_hosts files (per-instance) are cached in ~/.ec2ssh/
+    - Reassigning elastic IPs is no problem
+    - Supports rsync tunneling.  Your one stop shop for file transfers!
 
 Requirements
 
@@ -20,18 +20,37 @@ Usage
 
     ec2ssh <instance_name> [args to pass to ssh]
 
-Example
+Examples
 
-    ec2ssh mydev                                   # Interactive login
-    ec2ssh mydev -l ubuntu                         # Specify the user
-    ec2ssh mydev echo "Hello Secure Cloud World"   # Run command
+    # Interactive login
+    ec2ssh mydev                                   
+
+    # Specify the user and ssh verboseness
+    ec2ssh mydev -l ubuntu -v
+
+    # Alternative syntax
+    ec2ssh ubuntu@mydev
+
+    # Run command
+    ec2ssh mydev echo "Hello Secure Cloud World"   
+
+    # Upload file to instance
+    rsync --rsh=./ec2ssh.py /tmp/localfile.txt user@mydev:/tmp/file2.txt 
+
+    # Download file from instance
+    rsync --rsh=./ec2ssh.py user@mydev:/tmp/file2.txt /tmp/copy.txt
+
+    # Upload file to instance with root perms
+    rsync --rsh=./ec2ssh.py --rsync-path="sudo rsync" \
+            /tmp/local.txt user@mydev:/tmp/root.txt 
 
 Bugs
 
-    - Should atomically write/rename the known_hosts files
-    - Should support sftp too
     - AWS doc on how long console output is retained is clear as mud!
     - AWS should have a standard pubkey API and not use this hack!
+    - Should atomically write/rename the known_hosts files
+    - This script works best when the SSH options are AFTER the hostname.
+      However, certain options like -l work in front, since rsync does that.
 
 (C) 2017 Karl Pickett
 """
@@ -92,10 +111,32 @@ def trace(message):
     sys.stderr.flush()
 
 
+def find_hostname_arg(args):
+    """
+    The first non-option argument to ssh is the "hostname".
+    It may be prefixed by "user@".
+    Return (user_prefix, instance_name, arg_index)
+    """
+    # We need to have some knowledge of how ssh parses options
+    # Options that take values need to have their values skipped
+    options_to_skip = ["-l", "-o", "-i"]
+    for i, v in enumerate(args):
+        if i > 0 and args[i-1] in options_to_skip:
+            continue
+        if not v.startswith("-"):
+            parts = v.split("@", 1)
+            if len(parts) == 1:
+                return ("", parts[0], i)
+            else:
+                return (parts[0], parts[1], i)
+
+    raise Exception("Instance name is required")
+
+
 def main():
     args = sys.argv[1:]
-    instance_name = args[0]
-    ssh_forwarded_args = args[1:]
+    trace("Args: {}".format(args))
+    user_prefix, instance_name, arg_index = find_hostname_arg(args)
 
     os.makedirs(SSH_KEY_TMPDIR, exist_ok=True)
 
@@ -114,9 +155,14 @@ def main():
     else:
         trace("Using cached file: {}".format(file_name))
 
-    args = ["ssh", "-o", "UserKnownHostsFile " + file_name]
-    args += [ssh_hostname]
-    args += ssh_forwarded_args
+    # Replace the instance name with the IP 
+    args[arg_index:arg_index+1] = [ssh_hostname]
+
+    # Add our extra options to the front
+    extra_args = ["-o", "UserKnownHostsFile " + file_name]
+    if user_prefix:
+        extra_args += ["-l", user_prefix]
+    args = ["ssh"] + extra_args + args
     trace("Running: {}".format(args))
 
     # We probably could just exec this
