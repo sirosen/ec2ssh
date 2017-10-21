@@ -60,7 +60,7 @@ Examples
 
 Bugs
 
-    - AWS doc / guarnatee on how long GetConsoleOutput is retained is horrible!
+    - AWS doc / guarantee on how long GetConsoleOutput is retained is horrible!
     - AWS should have a standard pubkey API and not use this hack!
     - This script works best when the SSH options are AFTER the hostname.
       However, certain options like -l work in front, to support rsync.
