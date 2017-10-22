@@ -30,9 +30,9 @@ Requirements
     But the bucket is very secure, using the ec2:SourceInstanceARN IAM policy
     variable so each EC2 instance can only write its own file.
 
-    In the future, it might be nice if AWS would allow option c), which is
-    an instance setting a "SSHFingerprint" tag on itself.  As of Oct 2017,
-    however, AWS lacks a policy mechanism to do that securely.  Sigh.
+    In the future, I wish AWS would allow option c), which is an instance
+    setting a "SSHFingerprint" tag on itself during boot.  As of Oct 2017,
+    however, AWS can't do that securely.  Sigh.
 
 Environment Variables
 
