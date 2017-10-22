@@ -9,17 +9,30 @@ Synopsis
 
 Features
 
-    - No "trust on first use" problem or "host key changed" alerts.
-    - Does not modify your real known_hosts file
-    - Grabs instance public keys using standard cloud-init console output
-    - Creates and caches per-instance custom known_hosts files in ~/.ec2ssh/
+    - No "trust on first use" problem or "host key changed" alerts
+    - Does not modify your main known_hosts file
+    - Creates and caches per-instance minimal known_hosts files in ~/.ec2ssh/
     - Instance redeploys and elastic IP reassignments are no problem
     - Supports rsync tunneling.  This is your one stop shop for file transfers!
 
 Requirements
 
-    - A Linux EC2 instance running cloud-init (the default for Ubuntu)
     - Instance must have a "Name" tag
+    - There are two options for getting the instance's public keys:
+        a. Use the EC2 GetConsoleOutput API to get the cloud-init output
+        b. Have the instance write them to an S3 bucket during boot
+
+    Option a) is standard but the delay before GetConsoleOutput can be called
+    is 6 minutes.  That's annoying to wait that long for a fresh instance.
+
+    Option b) has no delay, but takes more scripting with cloud-init.
+    It also requires an S3 bucket, IAM policy setup, cross account access etc.
+    But the bucket is very secure, using the ec2:SourceInstanceARN IAM policy
+    variable so each EC2 instance can only write its own file.
+
+    In the future, it might be nice if AWS would allow option c), which is
+    an instance setting a "SSHFingerprint" tag on itself.  As of Oct 2017,
+    however, AWS lacks a policy mechanism to do that securely.  Sigh.
 
 Environment Variables
 
@@ -27,6 +40,11 @@ Environment Variables
         Use public IP of instance.  Default: private
     - EC2SSH_PUBKEY_DIR=<dir>  
         Directory that caches custom known hosts files.  Default: ~/.ec2ssh
+    - EC2SSH_PUBKEY_BUCKET
+        S3 bucket from which we lookup instance pubkeys.
+        The file we look for is ${bucket}/${instance_arn}/sshkeys, which
+        should have been already uploaded by cloud-init during boot.
+        If this var is not set, we fall back to using the console output.
     - EC2SSH_DEBUG=1 
         Enable debugging messages to stderr
 
@@ -60,13 +78,6 @@ Examples
 
 Bugs
 
-    - The GetConsoleOutput API SUCKS!  It takes ~6 minutes for a newly booted
-      instance to have its output available, and there is no guarantee on the 
-      retention time.  In practice, I've seen 8 month old instances still work.
-      
-    - AWS should have a standard pubkey API and not use this hack!  Tags would
-      be a pain because tag values are limited to 255 chars.
-
     - This script works best when the SSH options are AFTER the hostname.
       However, certain options like -l work in front, to support rsync.
 
@@ -90,18 +101,26 @@ if not PUBKEY_DIR:
 def get_instance_by_tag_name(client, name):
     tagfilter = dict(Name='tag:Name', Values=[name])
     response = client.describe_instances(Filters=[tagfilter])
+    owner = None
     ret = []
     for reservation in response["Reservations"]:
         instances = reservation["Instances"]
         ret += instances
+        owner = reservation["OwnerId"]
     if not ret:
         raise Exception("No instances found", name)
     if len(ret) > 1:
         raise Exception("Multiple instances found", name)
-    return ret[0]
+    return ret[0], owner
 
 
-def get_ssh_host_keys_from_console_output(client, instance_id):
+def get_host_pubkeys_from_console(client, instance_id):
+    """
+    Get instance's public keys from cloud-init output, via the EC2 console API.
+    This method works and is "standard" but unfortunately takes 6 minutes for
+    EC2 to post the initial boot data.  
+    """
+    debug("Getting console output: {}".format(instance_id))
     response = client.get_console_output(InstanceId=instance_id)
     if "Output" not in response:
         raise Exception("No console output yet - this may take a few minutes", 
@@ -115,6 +134,20 @@ def get_ssh_host_keys_from_console_output(client, instance_id):
         return keys
     else:
         raise Exception("No SSH HOST KEY KEYS found", instance_id)
+
+
+def get_host_pubkeys_from_s3(bucket, instance_arn):
+    """
+    Get instance's public keys from an S3 bucket.
+    This works immediately after boot, but requires more non-standard setup
+    and scripting via cloud-init.
+    """
+    object_name = instance_arn + "/sshkeys"
+    client = boto3.client('s3')
+    debug("Downloading S3 file: {}".format(object_name))
+    res = client.get_object(Bucket=bucket, Key=object_name)
+    data = res["Body"].read()
+    return str(data, "utf-8").strip().split("\n")
 
 
 def get_known_hosts_name(instance_id, ssh_hostname):
@@ -138,7 +171,7 @@ def write_custom_known_hosts_file(file_name, keys, ssh_hostname):
 def debug(message):
     if os.getenv("EC2SSH_DEBUG") != "1":
         return
-    sys.stderr.write(message.strip() + "\n")
+    sys.stderr.write(str(message).strip() + "\n")
     sys.stderr.flush()
 
 
@@ -176,7 +209,7 @@ def main():
     os.makedirs(PUBKEY_DIR, exist_ok=True)
 
     client = boto3.client('ec2')
-    instance = get_instance_by_tag_name(client, instance_name)
+    instance, account = get_instance_by_tag_name(client, instance_name)
 
     instance_id = instance["InstanceId"]
     if os.getenv("EC2SSH_PUBLIC_IP") == "1":
@@ -184,9 +217,18 @@ def main():
     else:
         ssh_hostname = instance["PrivateIpAddress"]
 
+    instance_arn = "arn:aws:ec2:{region}:{acct}:instance/{id}".format(
+            region=boto3.DEFAULT_SESSION.region_name,
+            acct=account,
+            id=instance_id)
+    bucket = os.getenv("EC2SSH_PUBKEY_BUCKET")
+
     file_name = get_known_hosts_name(instance_id, ssh_hostname)
     if not os.path.exists(file_name):
-        keys = get_ssh_host_keys_from_console_output(client, instance_id)
+        if bucket:
+            keys = get_host_pubkeys_from_s3(bucket, instance_arn)
+        else:
+            keys = get_host_pubkeys_from_console(client, instance_id)
         write_custom_known_hosts_file(file_name, keys, ssh_hostname)
         debug("Created new file: {}".format(file_name))
     else:
