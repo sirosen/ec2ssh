@@ -32,7 +32,8 @@ Requirements
 
     In the future, I wish AWS would allow option c), which is an instance
     setting a "SSHFingerprint" tag on itself during boot.  As of Oct 2017,
-    however, AWS can't do that securely.  Sigh.
+    however, AWS can't do that securely (an instance can change other tags and
+    other instances).  Sigh.
 
 Environment Variables
 
