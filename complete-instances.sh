@@ -8,10 +8,12 @@
 _comp_ec2ssh()
 {
     local IFS=$' \t\n'    # normalize IFS
-    local cur="$2"
+    local currentcommand="$1"
+    local currentword="$2"
+    local previousword="$3"
     # prints paths one per line; could also use while loop
     IFS=$'\n'
-    COMPREPLY=( $(complete-instances.py "$cur") )
+    COMPREPLY=( $(complete-instances.py "$currentword") )
     IFS=$' \t\n'
 
     return 0
