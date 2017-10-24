@@ -25,3 +25,7 @@ alias es=ec2ssh.py
 
 # Use a bash completion function (-F) for the "es" command
 complete -F _complete_ec2ssh es
+
+# If you're annoyed by hitting hit tab twice before anything happens...
+# This makes the first tab press always show the options
+bind 'set show-all-if-ambiguous on'
