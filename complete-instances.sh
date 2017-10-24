@@ -5,7 +5,7 @@
 # or add that to inputrc.  Yuck.
 # Otherwise, it takes two tab presses...
 
-_comp_ec2ssh()
+_complete_ec2ssh()
 {
     local IFS=$' \t\n'    # normalize IFS
     local currentcommand="$1"
@@ -22,4 +22,6 @@ _comp_ec2ssh()
 # Make sure to add these to your PATH
 # A two letter, super short alias.
 alias es=ec2ssh.py
-complete -F _comp_ec2ssh es
+
+# Use a bash completion function (-F) for the "es" command
+complete -F _complete_ec2ssh es
