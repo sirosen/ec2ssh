@@ -1,0 +1,38 @@
+= Example S3 Bucket Policy
+
+A single S3 bucket can contain SSH server public keys for many accounts and
+regions.  By using an S3 bucket, you eliminate the 6 minute delay that
+GetConsoleOutput imposes, and the public keys are visible immediately after
+boot.
+
+This example bucket policy gives access to two different accounts.  Note that
+each account also needs to delegate s3:PutObject access to all of their IAM EC2
+Instance Role(s), and it's easy to do that with a managed policy that is
+attached to each role.
+
+The bucket is quite secure, allowing any instance to only create / modify its
+own pubkeys file.  Note that you will also have to allow read access to your
+admins, or allow public read access (which is fine since only public keys are
+stored).
+
+TODO: Add a condition to ensure ec2:SourceInstanceARN is set
+
+.Example S3 Bucket Policy
+----
+{  
+   "Version":"2012-10-17",
+   "Statement":[  
+      {  
+         "Effect":"Allow",
+         "Principal":{  
+            "AWS":[  
+               "arn:aws:iam::111122223333:root",
+               "arn:aws:iam::111122224444:root"
+            ]
+         },
+         "Action":"s3:PutObject",
+         "Resource":"arn:aws:s3:::mycompany.pubkeys/${ec2:SourceInstanceARN}/pubkeys"
+      }
+   ]
+}
+----
